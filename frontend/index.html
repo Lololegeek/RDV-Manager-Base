@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mes Rendez-vous</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6 flex flex-col">
+
+  <!-- Barre top avec email et bouton prendre RDV -->
+  <header class="flex justify-between items-center bg-white shadow p-4 rounded mb-6">
+    <div>
+      <label for="emailInput" class="font-semibold mr-2">Votre email :</label>
+      <input id="emailInput" type="email" placeholder="exemple@mail.com"
+        class="border border-gray-300 rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      <button id="saveEmailBtn" class="ml-2 bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">Enregistrer</button>
+    </div>
+    <button id="btnNewAppt" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Prendre RDV</button>
+  </header>
+
+  <!-- Notification RDV accepté -->
+  <div id="notification" class="hidden fixed top-4 right-4 bg-green-500 text-white px-4 py-3 rounded shadow-lg z-50">
+    🎉 Vous avez un rendez-vous accepté !
+    <button id="closeNotif" class="ml-4 font-bold hover:text-gray-200">×</button>
+  </div>
+
+  <!-- Liste des RDV en haut à droite -->
+  <aside class="fixed top-16 right-4 w-80 max-h-[60vh] overflow-y-auto bg-white shadow rounded p-4">
+    <h2 class="text-xl font-bold mb-3">Vos rendez-vous</h2>
+    <ul id="apptList" class="space-y-2 text-sm"></ul>
+  </aside>
+
+  <!-- Modal formulaire prise RDV -->
+  <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-40">
+    <div class="bg-white rounded p-6 w-96">
+      <h2 class="text-2xl mb-4 font-semibold">Nouveau rendez-vous</h2>
+      <form id="formAppt" class="space-y-4">
+        <div>
+          <label for="name" class="block mb-1 font-medium">Nom</label>
+          <input id="name" type="text" required
+            class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+        </div>
+        <div>
+          <label for="datetime" class="block mb-1 font-medium">Date & Heure</label>
+          <input id="datetime" type="datetime-local" required
+            class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+        </div>
+        <div class="flex justify-end space-x-2">
+          <button type="button" id="btnCancel" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Annuler</button>
+          <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Envoyer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<script>
+  const apiBase = "http://localhost:8000";
+
+  // Gérer email localStorage
+  const emailInput = document.getElementById('emailInput');
+  const saveEmailBtn = document.getElementById('saveEmailBtn');
+
+  function loadEmail() {
+    const savedEmail = localStorage.getItem('userEmail');
+    if (savedEmail) {
+      emailInput.value = savedEmail;
+    }
+  }
+  saveEmailBtn.addEventListener('click', () => {
+    const email = emailInput.value.trim();
+    if (email) {
+      localStorage.setItem('userEmail', email);
+      alert("Email enregistré !");
+      loadAppointments();
+    } else {
+      alert("Merci de saisir un email valide.");
+    }
+  });
+
+  loadEmail();
+
+  // Gestion modal
+  const modal = document.getElementById('modal');
+  const btnNewAppt = document.getElementById('btnNewAppt');
+  const btnCancel = document.getElementById('btnCancel');
+  const formAppt = document.getElementById('formAppt');
+
+  btnNewAppt.addEventListener('click', () => {
+    if (!emailInput.value.trim()) {
+      alert("Merci d'entrer votre email avant de prendre un rendez-vous.");
+      return;
+    }
+    modal.classList.remove('hidden');
+  });
+  btnCancel.addEventListener('click', () => {
+    modal.classList.add('hidden');
+    formAppt.reset();
+  });
+  modal.addEventListener('click', e => {
+    if (e.target === modal) {
+      modal.classList.add('hidden');
+      formAppt.reset();
+    }
+  });
+
+  // Affichage liste RDV
+  const apptList = document.getElementById('apptList');
+
+  async function loadAppointments() {
+    const email = localStorage.getItem('userEmail');
+    if (!email) {
+      apptList.innerHTML = `<li class="italic text-gray-500">Entrez votre email pour voir vos rendez-vous.</li>`;
+      return;
+    }
+    try {
+      const res = await fetch(`${apiBase}/appointments?email=${encodeURIComponent(email)}`);
+      if (!res.ok) throw new Error("Erreur API");
+      const data = await res.json();
+      if (!data.length) {
+        apptList.innerHTML = `<li class="italic text-gray-500">Aucun rendez-vous trouvé.</li>`;
+        hideNotification();
+        return;
+      }
+      apptList.innerHTML = '';
+      let hasAccepted = false;
+      data.forEach(appt => {
+        const li = document.createElement('li');
+        li.className = "border border-gray-300 rounded px-3 py-2 flex justify-between items-center";
+        li.innerHTML = `
+          <div>
+            <div><strong>${appt.name}</strong></div>
+            <div class="text-xs text-gray-600">${new Date(appt.datetime).toLocaleString()}</div>
+            <div class="text-sm font-semibold ${appt.status === 'accepted' ? 'text-green-600' : (appt.status === 'declined' ? 'text-red-600' : 'text-gray-600')}">
+              ${appt.status.charAt(0).toUpperCase() + appt.status.slice(1)}
+            </div>
+          </div>
+        `;
+        apptList.appendChild(li);
+
+        if (appt.status === 'accepted') hasAccepted = true;
+      });
+      if (hasAccepted) {
+        showNotification();
+      } else {
+        hideNotification();
+      }
+    } catch (err) {
+      apptList.innerHTML = `<li class="italic text-red-500">Erreur de chargement des rendez-vous.</li>`;
+      console.error(err);
+      hideNotification();
+    }
+  }
+
+  function showNotification() {
+    document.getElementById('notification').classList.remove('hidden');
+  }
+  function hideNotification() {
+    document.getElementById('notification').classList.add('hidden');
+  }
+
+  document.getElementById('closeNotif').addEventListener('click', () => {
+    hideNotification();
+  });
+
+  // Soumission formulaire RDV
+  formAppt.addEventListener('submit', async e => {
+    e.preventDefault();
+    const name = document.getElementById('name').value.trim();
+    const email = emailInput.value.trim();
+    const datetime = document.getElementById('datetime').value;
+
+    if (!name || !email || !datetime) {
+      alert("Merci de remplir tous les champs.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${apiBase}/appointments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, datetime }),
+      });
+      if (res.ok) {
+        alert("Rendez-vous envoyé, en attente de validation.");
+        modal.classList.add('hidden');
+        formAppt.reset();
+        loadAppointments();
+      } else {
+        alert("Erreur lors de la prise de rendez-vous.");
+      }
+    } catch (err) {
+      alert("Erreur réseau ou serveur.");
+      console.error(err);
+    }
+  });
+
+  loadAppointments();
+</script>
+
+</body>
+</html>

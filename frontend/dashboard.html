@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6 flex flex-col items-center min-h-screen">
+
+  <div class="bg-white rounded-lg shadow p-6 w-full max-w-4xl">
+
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-3xl font-bold">Gestion des rendez-vous</h2>
+      <button id="btnCalendar" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Calendrier</button>
+    </div>
+
+    <table class="table-auto w-full border-collapse border border-gray-300">
+      <thead>
+        <tr class="bg-gray-200">
+          <th class="border border-gray-300 px-3 py-2">ID</th>
+          <th class="border border-gray-300 px-3 py-2">Nom</th>
+          <th class="border border-gray-300 px-3 py-2">Email</th>
+          <th class="border border-gray-300 px-3 py-2">Date</th>
+          <th class="border border-gray-300 px-3 py-2">Statut</th>
+          <th class="border border-gray-300 px-3 py-2">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+<script>
+  const apiBase = "http://localhost:8000";
+  const adminKey = "supersecret";
+
+  document.getElementById('btnCalendar').addEventListener('click', () => {
+    window.location.href = 'calendar.html';
+  });
+
+  async function loadAppointments() {
+    const res = await fetch(`${apiBase}/admin/appointments`, {
+      headers: { "X-Admin-Key": adminKey }
+    });
+    const data = await res.json();
+    const tbody = document.getElementById("tbody");
+    tbody.innerHTML = "";
+    data.forEach(r => {
+      const tr = document.createElement("tr");
+      tr.className = "hover:bg-gray-100";
+      tr.innerHTML = `
+        <td class="border border-gray-300 px-3 py-1">${r.id}</td>
+        <td class="border border-gray-300 px-3 py-1">${r.name}</td>
+        <td class="border border-gray-300 px-3 py-1">${r.email}</td>
+        <td class="border border-gray-300 px-3 py-1">${new Date(r.datetime).toLocaleString()}</td>
+        <td class="border border-gray-300 px-3 py-1 font-semibold">${r.status}</td>
+        <td class="border border-gray-300 px-3 py-1 space-x-2">
+          <button onclick="updateStatus(${r.id}, 'accepted')" class="bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700">Accepter</button>
+          <button onclick="updateStatus(${r.id}, 'declined')" class="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700">Refuser</button>
+          <button onclick="deleteAppt(${r.id})" class="bg-gray-600 text-white px-2 py-1 rounded hover:bg-gray-700">Supprimer</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function updateStatus(id, status) {
+    await fetch(`${apiBase}/admin/appointments/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Admin-Key": adminKey
+      },
+      body: JSON.stringify({ status })
+    });
+    loadAppointments();
+  }
+
+  async function deleteAppt(id) {
+    await fetch(`${apiBase}/admin/appointments/${id}`, {
+      method: "DELETE",
+      headers: { "X-Admin-Key": adminKey }
+    });
+    loadAppointments();
+  }
+
+  loadAppointments();
+</script>
+
+</body>
+</html>

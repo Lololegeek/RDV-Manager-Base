@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Calendrier RDV</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FullCalendar (CDN) -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+</head>
+<body class="bg-gray-100 p-6 min-h-screen flex flex-col items-center">
+
+  <div class="w-full max-w-5xl bg-white rounded shadow p-6">
+    <div class="flex justify-between items-center mb-4">
+      <h1 class="text-3xl font-bold">Calendrier des rendez-vous</h1>
+      <button id="btnAdd" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Ajouter RDV</button>
+    </div>
+
+    <div id="calendar"></div>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden" style="z-index: 1000;">
+    <div class="bg-white rounded p-6 w-96" id="formRdv">
+      <h2 class="text-2xl mb-4 font-semibold">Nouveau rendez-vous</h2>
+      <form id="appointmentForm" class="space-y-4">
+        <div>
+          <label class="block mb-1 font-medium" for="name">Nom</label>
+          <input type="text" id="name" required class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block mb-1 font-medium" for="email">Email</label>
+          <input type="email" id="email" required class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label class="block mb-1 font-medium" for="datetime">Date & Heure</label>
+          <input type="datetime-local" id="datetime" required class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div class="flex justify-end space-x-2">
+          <button type="button" id="btnCancel" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Annuler</button>
+          <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Ajouter</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<script>
+  const apiBase = "http://localhost:8000";
+
+  // FullCalendar init
+  const calendarEl = document.getElementById('calendar');
+  const calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: 'dayGridMonth',
+    height: 600,
+    eventTimeFormat: {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    },
+    events: async function(fetchInfo, successCallback) {
+      // Charger les rdv
+      const res = await fetch(`${apiBase}/admin/appointments`, {
+        headers: { "X-Admin-Key": "supersecret" }
+      });
+      const data = await res.json();
+      // Transformer pour FullCalendar
+      const events = data.map(r => ({
+        id: r.id,
+        title: `${r.name} (${r.status})`,
+        start: r.datetime,
+        color: r.status === "accepted" ? "green" : (r.status === "declined" ? "red" : "gray")
+      }));
+      successCallback(events);
+    }
+  });
+  calendar.render();
+
+  // Modal et formulaire
+  const modal = document.getElementById('modal');
+  const form = document.getElementById('appointmentForm');
+  const btnAdd = document.getElementById('btnAdd');
+  const btnCancel = document.getElementById('btnCancel');
+
+  function openModal() {
+    modal.classList.remove('hidden');
+  }
+  function closeModal() {
+    modal.classList.add('hidden');
+    form.reset();
+  }
+
+  // Clic hors formulaire ferme modal
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+  // Stop propagation clic dans formulaire pour éviter fermeture
+  document.getElementById('formRdv').addEventListener('click', e => e.stopPropagation());
+
+  btnAdd.addEventListener('click', openModal);
+  btnCancel.addEventListener('click', closeModal);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById('name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const datetime = document.getElementById('datetime').value;
+
+    if (!name || !email || !datetime) {
+      alert("Merci de remplir tous les champs.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${apiBase}/appointments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, datetime })
+      });
+      if (res.ok) {
+        alert("Rendez-vous ajouté, en attente de validation.");
+        closeModal();
+        calendar.refetchEvents();
+      } else {
+        alert("Erreur lors de l'ajout du rendez-vous.");
+      }
+    } catch (err) {
+      alert("Erreur réseau ou serveur.");
+      console.error(err);
+    }
+  });
+</script>
+
+</body>
+</html>
